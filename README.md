@@ -19,10 +19,6 @@ Executar o script:
 
 python scrape_abola.py
 
-scraper-abola/
-│── scrape_abola.py    # Código principal do scraper
-│── README.md          # Documentação do projeto
-
 ✨ Melhorias futuras:
 📅 Recolher data e hora da notícia.
 🖼️ Guardar imagens das notícias.
