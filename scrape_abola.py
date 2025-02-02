@@ -10,9 +10,12 @@ import time
 # Configuração do Selenium para Chrome
 options = Options()
 options.add_argument("--headless")  # Roda o navegador sem abrir janela
-options.add_argument("--disable-gpu")
+options.add_argument("--disable-gpu")  # Evita erro de WebGL
 options.add_argument("--no-sandbox")
 options.add_argument("--log-level=3")  # Reduz mensagens no terminal
+options.add_argument("--disable-software-rasterizer")  # Evita erros gráficos
+options.add_argument("--disable-dev-shm-usage")  # Otimiza uso de memória
+options.add_argument("start-maximized")
 
 # Inicializar o navegador
 service = Service(ChromeDriverManager().install())
@@ -22,7 +25,7 @@ driver = webdriver.Chrome(service=service, options=options)
 url = "https://www.abola.pt/"
 driver.get(url)
 
-# Esperar até que o carrossel carregue
+# Esperar até que a página carregue completamente
 try:
     WebDriverWait(driver, 10).until(
         EC.presence_of_element_located((By.CLASS_NAME, "abola-slider"))
@@ -30,37 +33,42 @@ try:
     print("🔄 Página carregada com sucesso!")
 except:
     print("⚠️ O carrossel demorou muito a carregar!")
+    driver.quit()
+    exit()
 
 # Recolher links das 10 primeiras notícias
 links_noticias = []
-for i in range(10):  # Pegamos as 10 primeiras notícias do carrossel
-    try:
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CLASS_NAME, "splide__slide"))
-        )
-        noticias = driver.find_elements(By.CLASS_NAME, "splide__slide")
-        noticia = noticias[i]
+try:
+    WebDriverWait(driver, 10).until(
+        EC.presence_of_element_located((By.CLASS_NAME, "splide__slide"))
+    )
+    noticias = driver.find_elements(By.CLASS_NAME, "splide__slide")
 
-        link_element = noticia.find_element(By.TAG_NAME, "a")
-        link = link_element.get_attribute("href")
-        if link.startswith("/"):
-            link = f"https://www.abola.pt{link}"
+    for i in range(min(10, len(noticias))):  # Garantir que não ultrapassa os limites
+        try:
+            link_element = noticias[i].find_element(By.TAG_NAME, "a")
+            link = link_element.get_attribute("href")
 
-        links_noticias.append(link)
-    except Exception as e:
-        print(f"⚠️ Erro ao recolher link da notícia {i+1}: {e}")
-        continue
+            if link.startswith("/"):
+                link = f"https://www.abola.pt{link}"  # Corrigir links relativos
+
+            if link not in links_noticias:  # Evitar links duplicados
+                links_noticias.append(link)
+        except Exception as e:
+            print(f"⚠️ Erro ao recolher link da notícia {i+1}: {e}")
+
+except Exception as e:
+    print(f"❌ Erro ao carregar a lista de notícias: {e}")
 
 # Lista para armazenar os dados das notícias
 dados = []
 
 for i, link in enumerate(links_noticias, start=1):
     try:
-        # Acessar a página da notícia
         driver.get(link)
-        time.sleep(5)  # Espera extra para carregar o conteúdo da notícia
+        time.sleep(3)  # Espera extra para carregar o conteúdo da notícia
 
-        # Capturar o título correto dentro da página da notícia
+        # Capturar o título
         try:
             titulo_element = WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.CLASS_NAME, "titulo"))
@@ -74,8 +82,8 @@ for i, link in enumerate(links_noticias, start=1):
             conteudo_element = WebDriverWait(driver, 10).until(
                 EC.presence_of_element_located((By.CLASS_NAME, "single-news-content"))
             )
-            paragrafos = conteudo_element.find_elements(By.TAG_NAME, "p")  # Capturar todos os parágrafos
-            conteudo = "\n".join([p.text.strip() for p in paragrafos if p.text.strip()])  # Juntar os parágrafos
+            paragrafos = conteudo_element.find_elements(By.TAG_NAME, "p")
+            conteudo = "\n".join([p.text.strip() for p in paragrafos if p.text.strip()])
         except:
             conteudo = "❌ Não foi possível recolher a notícia."
 
@@ -86,13 +94,10 @@ for i, link in enumerate(links_noticias, start=1):
             "Notícia": conteudo
         })
 
-        # Voltar à página principal para carregar novamente a lista
-        driver.get(url)
-        time.sleep(3)  # Pequena espera para garantir que tudo recarregue antes da próxima notícia
+        print(f"✅ Notícia {i} recolhida com sucesso!")
 
     except Exception as e:
         print(f"⚠️ Erro ao processar notícia {i}: {e}")
-        continue
 
 # Fechar navegador
 driver.quit()
@@ -105,5 +110,5 @@ else:
     for i, noticia in enumerate(dados, start=1):
         print(f"{i}. {noticia['Título']}")
         print(f"   📎 Link: {noticia['Link']}")
-        print(f"   📰 Notícia:\n{noticia['Notícia'][:500]}...")  # Exibir apenas os primeiros 500 caracteres
+        print(f"   📰 Notícia:\n{noticia['Notícia'][:500]}...")  # Exibir os primeiros 500 caracteres
         print("-" * 100)
